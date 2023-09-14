@@ -1,0 +1,44 @@
+name: oval-core-tools
+base: core22
+version: '0.1'
+summary: This snap provides tools for Single-line elevator pitch for your amazing snap # 79 char long summary
+description: |
+  This is my-snap's description. You have a paragraph or two to tell the
+
+grade: devel # must be 'stable' to release into candidate/stable channels
+confinement: devmode # use 'strict' once you have the right plugs and slots
+
+apps:
+  cvereport:
+    command: cvereport.sh
+  scan:
+    command: bin/snap_manifest.py
+
+parts:
+  snap-manifests:
+    plugin: python
+    source: ./snap-manifests
+    python-packages: [pyyaml]
+  report:
+    plugin: dump
+    source: ./report
+    stage-packages:
+      - bzip2
+      - curl
+      - jq
+      - libopenscap8
+      - wget
+      - xmlstarlet
+    stage:
+      - -usr/lib/*/libicuio.so.*
+      - -usr/lib/*/libicutest.so.*
+      - -usr/lib/*/libicutu.so*
+      - -usr/lib/*/libicui18n.so*
+      - -usr/lib/*/libopenscap_sce.so.*
+
+layout:
+  /usr/share/openscap/schemas:
+    symlink: $SNAP/usr/share/openscap/schemas
+  # required due to oval_probe_eval chdir() logic
+  /usr/lib/x86_64-linux-gnu/openscap:
+    symlink: $SNAP/usr/lib/x86_64-linux-gnu/openscap
