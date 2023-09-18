@@ -73,8 +73,10 @@ process_oval_results() {
 
         # FIXME: If may be possible to just strip the trailing 7 '0's from the OVAL def_id to come up
         # with the CVE ID w/out having to parse the XML for each one...
-        cve=$(xmlstarlet sel -n -N x="http://oval.mitre.org/XMLSchema/oval-definitions-5" -t -v "$v_str" $3)
-        printf "CVE: %s\n" ${cve}
+        #cve=$(xmlstarlet sel -n -N x="http://oval.mitre.org/XMLSchema/oval-definitions-5" -t -v "$v_str" $3)
+        cve=$(echo $i | cut -d':' -f4 | sed -e 's/\(^.\{4\}\)\(.*\)\(.\{7\}\)/CVE-\1-\2/')
+        #printf "CVE: id: %s - %s\n" $i ${cve}
+        #exit
         cve_json=$(curl -s https://ubuntu.com/security/cves/$cve.json)
         cve_pri=$(echo $cve_json | jq -r '.priority')
         cve_packages=$(echo $cve_json | jq -r '.packages[].name' | tr '\n' ', ' | sed -e 's/,$//')
