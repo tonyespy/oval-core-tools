@@ -40,5 +40,5 @@ layout:
   /usr/share/openscap/schemas:
     symlink: $SNAP/usr/share/openscap/schemas
   # required due to oval_probe_eval chdir() logic
-  /usr/lib/x86_64-linux-gnu/openscap:
-    symlink: $SNAP/usr/lib/x86_64-linux-gnu/openscap
+  /usr/lib/$CRAFT_ARCH_TRIPLET/openscap:
+    symlink: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/openscap
