@@ -25,11 +25,13 @@ TZ=UTC export NOW=$(date +%s)sec
 prog=${0##*/}
 cve_dir='/tmp/core_cvereport'
 cve_html=false
+cve_all=false
 cve_low=false
 cve_med=false
 cve_neg=false
 cve_purge=false
 cve_url=false
+min_cve_pri=""
 kernel_rel="none"
 
 #########
@@ -44,7 +46,7 @@ usage() {
     printf "\e[3G -k, --krel\e[28GSpecify kernel release\n\n"
     printf "\e[3G -l, --low\e[28GInclude 'low' priority CVEs (Default: False)\n\n"
     printf "\e[3G -m, --medium\e[28GInclude 'medium' priority CVEs (Default: False)\n\n"
-    printf "\e[3G -n, --neglible\e[28GInclude 'neglibile' priority CVEs (Default: False)\n\n"
+    printf "\e[3G -n, --negligible\e[28GInclude 'negligibile' priority CVEs (Default: False)\n\n"
     printf "\e[3G -p, --purge\e[28GPurge existing CVE Report Data Dir (Default: False)\n\n"
     printf "\e[3G -u, --url\e[28GOutput Ubuntu CVE URL (Default: False)\n\n"
     printf "\e[3G -h, --help\e[28GThis message\n\n"
@@ -54,6 +56,11 @@ usage() {
     printf "\e[6G%s.sh -d %s/cvereport_files\n" ${FUNCNAME%%-*} "$HOME"
 }
 
+
+# FIXME: this function should be removed, but it's currently being kept for reference
+# in order to illustrate functionality not possible with OVAL data alone (namely being
+# able to identify the packages associated with specific CVEs.
+#
 # $1 = list of space separated OVAL vulnerability IDs
 # $2 = summary snap name
 # $3 = result_file
@@ -68,6 +75,9 @@ process_oval_results() {
 
     for i in $1
     do
+        printf "CVE entry: %s\n" ${i}
+        continue
+
         edit_str="s/ID/$i/"
         v_str=$(echo "$cve_xpath" | sed -e "$edit_str")
 
@@ -140,7 +150,7 @@ process_manifest() {
     local report_file=""
     local summary_snap=""
 
-    printf "\n\e[2GManifest file: %s\n" $1
+    #printf "\n\e[2GManifest file: %s\n" $1
 
     manifest_file=$(basename $1)
     if [ ${manifest_file} = "manifest.bare" ]; then
@@ -148,28 +158,26 @@ process_manifest() {
         return
     fi
 
-    if [ ${manifest_file} = "manifest.core" ]; then
+    if [[ ${manifest_file} = "manifest.core" ]]; then
         oval_dist="xenial"
-    elif [ ${manifest_file} = "manifest.snapd" ]; then
+    elif [[ ${manifest_file} = "manifest.snapd" ]]; then
         oval_dist="xenial"
-    elif [ ${manifest_file} = "manifest.core18" ]; then
+    elif [[ ${manifest_file} = "manifest.core18" ]]; then
         oval_dist="bionic"
-    elif [ ${manifest_file} = "manifest.core20" ]; then
+    elif [[ ${manifest_file} = "manifest.core20" ]]; then
         oval_dist="focal"
-    elif [ ${manifest_file} = "manifest.core22" ]; then
+    elif [[ ${manifest_file} = "manifest.core22" ]]; then
         oval_dist="jammy"
-    else
+    elif [[ ${manifest_file} = manifest.*kernel* ]]; then
+        if [[ ! -z ${kernel_rel} ]]; then
+            oval_dist=${kernel_rel}
+        else
+            printf "No kernel release specified, skipping %s\n" ${manifest_file}
+            return
+        fi
+   else
         printf "Unsupported manifest release: %s\n" $1
         return
-    fi
-
-    # if kernel release matches ${oval_dist} then concatenate
-    # the two files so that the kernel CVEs are reported in
-    # conjunction with the corresponding core snap.
-    if [ ${kernel_rel} = ${oval_dist} ]; then
-        cat $1 ./$2 > ./manifest.tmp
-        cp manifest.tmp $1
-        rm ./manifest.tmp
     fi
 
     # FIXME: add error check!
@@ -196,20 +204,15 @@ process_manifest() {
         fi
     fi
 
-    # FIXME: debug
-    printf "result_file: %s\n" $result_file
-    printf "report_file: %s\n" $report_file
-
     ######################
     # DOWNLOAD OVAL DATA #
     ######################
     printf "\n\e[2G\e[1mDownload OVAL Data for CVE scanning to %s\e[0m\n" ${oval_dir}
-    #export SCAN_RELEASE=$(lsb_release -sc)
-
-    #oval_uri="https://security-metadata.canonical.com/oval/oci.com.ubuntu.jammy.cve.oval.xml.bz2"
     oval_uri="https://security-metadata.canonical.com/oval/oci.com.ubuntu.${oval_dist}.cve.oval.xml.bz2"
     test_oval=$(curl -slSL --connect-timeout 5 --max-time 20 --retry 5 --retry-delay 1 -w %{http_code} -o /dev/null ${oval_uri} 2>&1)
 
+    # TODO: add code to check for pre-existing OVAL files (i.e. xenial is currently
+    # twice if manifest.core and manifest.snapd are present.
     [[ ${test_oval:(-3)} -eq 200 ]] && { printf "\r\e[2G - \e[38;2;0;160;200mINFO\e[0m: Downloading OVAL data for Ubuntu ${SCAN_RELEASE^}\n";wget --show-progress --progress=bar:noscroll --no-dns-cache -qO- ${oval_uri}|bunzip2 -d|tee 1>/dev/null ${oval_dir}/$(basename ${oval_uri//.bz2}); }
     [[ ${test_oval:(-3)} -eq 404 ]] && { printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: OVAL data file for Ubuntu ${SCAN_RELEASE^} does not exist. Skipping\n" ; }
     [[ ${test_oval:(-3)} -eq 200 && -s ${oval_dir}/$(basename ${oval_uri//.bz2}) ]] && { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Copied OVAL data for for ${oval_dist} to ${oval_dir}/$(basename ${oval_uri//.bz2})\n"; }
@@ -218,11 +221,9 @@ process_manifest() {
     # RUN OSCAP OVAL EVAL    #
     ##########################
     report_retval=$(oscap oval eval --result ${result_file} ${report_file} ${oval_dir}/$(basename ${oval_uri//.bz2}) 1> /dev/null)
-    def_ids=$(xmlstarlet sel -n -N x="http://oval.mitre.org/XMLSchema/oval-results-5" -t -v "//x:definition[@result='true']/@definition_id" ${result_file})
 
     # FIXME: add debug flag?
-    #printf "%s\n" ${def_ids}
-    process_oval_results "${def_ids}" ${summary_snap} ${result_file} ${cve_report} ${cve_summary}
+    ${SNAP}/bin/parse_oval_results.py ${result_file} ${oval_dist} ${manifest_file} ${min_cve_pri} | tee -a ${cve_summary}
 
     # FIXME: add error check
     rm manifest
@@ -232,15 +233,16 @@ process_manifest() {
 # ARGS/OPTIONS #
 ################
 
-ARGS=$(getopt -o d:k:lmnpuhH --long dir:,krel:low,medium,neglible,purge,url,help,html -n ${prog} -- "$@")
+ARGS=$(getopt -o d:k:almnpuhH --long dir:,krel:all,low,medium,negligible,purge,url,help,html -n ${prog} -- "$@")
 eval set -- "$ARGS"
 while true ; do
     case "$1" in
         -d|--dir) export cve_dir=${2};shift 2;;
         -k|--krel) export kernel_rel=${2};shift 2;;
+        -a|--all) export cve_all=true;shift 1;;
+        -n|--negligible) export cve_neg=true;shift 1;;
         -l|--low) export cve_low=true;shift 1;;
         -m|--medium) export cve_med=true;shift 1;;
-        -n|--neglible) export cve_neg=true;shift 1;;
         -p|--purge) export cve_purge=true;shift 1;;
         -u|--url) export cve_url=true;shift 1;;
         -h|--help) usage;exit 2;;
@@ -249,22 +251,33 @@ while true ; do
     esac
 done
 
+if [[ ${cve_all} = true ]]; then
+    min_cve_pri="untriaged"
+elif [[ ${cve_neg} = true ]]; then
+    min_cve_pri="negligible"
+elif [[ ${cve_low} = true ]]; then
+    min_cve_pri="low"
+elif [[ ${cve_med} = true ]]; then
+    min_cve_pri="medium"
+else
+    min_cve_pri="high"
+fi
+
 ########
 # TODO #
 ########
 #
 # - Should there be a single meta-summary file?
-# - Snapd Summary should read snapd, not xenial!
-# - Maybe snap_manifest.py should combine .core & .snapd?
-# - Try extrapolating CVE ID from OVAL defids (i.e. strip the
-#   last seven '0's)
-# - Add option to use on-disk OVAL files
+# - Check for existing OVAL CVE files
 # - move OVAL results file into manifest /results sub-dir
-# - move CVE JSON into /cve dir
 # - Add a cmdline flag to surpress the manifest associated with this snap's
 #   base, if the system being scanned doesn't include it.
 #   (NOTE - this won't apply to scanned images, only running systems)
 # - Add support to scan an image
+# - [snap_manifest.py] update to generate manifests for each snap (otherwise
+#   there's no way tell which snap a CVE belongs to...
+# - [snap_manifest.py] add entry for snapd to manifest.snapd
+#   there's no way tell which snap a CVE belongs to...
 # - Fix priority logic (build an array of priorities to match on startup)
 # - Fix all shellcheck errors
 # - Unify if/test syntax

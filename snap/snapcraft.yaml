@@ -15,9 +15,9 @@ apps:
     command: bin/snap_manifest.py
 
 parts:
-  snap-manifests:
+  oval-tools:
     plugin: python
-    source: ./snap-manifests
+    source: ./oval-tools
     python-packages: [pyyaml]
   report:
     plugin: dump
