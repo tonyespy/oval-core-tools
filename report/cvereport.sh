@@ -71,15 +71,10 @@ process_oval_results() {
         edit_str="s/ID/$i/"
         v_str=$(echo "$cve_xpath" | sed -e "$edit_str")
 
-        # FIXME: If may be possible to just strip the trailing 7 '0's from the OVAL def_id to come up
-        # with the CVE ID w/out having to parse the XML for each one...
-        #cve=$(xmlstarlet sel -n -N x="http://oval.mitre.org/XMLSchema/oval-definitions-5" -t -v "$v_str" $3)
+        # FIXME use xmlstarlet --var syntex instead of sed
+        cve_pri=$(xmlstarlet sel -n -N x="http://oval.mitre.org/XMLSchema/oval-definitions-5" -t -v "$v_str" $3)
         cve=$(echo $i | cut -d':' -f4 | sed -e 's/\(^.\{4\}\)\(.*\)\(.\{7\}\)/CVE-\1-\2/')
-        printf "CVE: %s\n" ${cve}
-
-        cve_json=$(curl -s https://ubuntu.com/security/cves/$cve.json)
-        cve_pri=$(echo $cve_json | jq -r '.priority')
-        cve_packages=$(echo $cve_json | jq -r '.packages[].name' | tr '\n' ', ' | sed -e 's/,$//')
+        printf "<cve> is: %s (%s)\n" ${cve} ${cve_pri}
 
         if [[ "$cve_pri" = "critical" ]]; then
             ((crit_cnt++))
@@ -107,10 +102,8 @@ process_oval_results() {
             continue
         fi
 
-        echo "$cve_json" > "$cve_dir/$cve.$cve_pri.json"
-
         printf "\e[2G - \e[38;2;0;255;0m"
-        printf "%s | %s | %s" "$cve" "$cve_pri" "$cve_packages" | tee -a $4
+        printf "%s | %s | %s" "$cve" "$cve_pri" | tee -a $4
 
         if [[ "$cve_url" = true ]]; then
             printf " | <https://ubuntu.com/security/%s>\n" "$cve" | tee -a $4
@@ -271,7 +264,7 @@ done
 # - Unify var quoting/bracing usage
 # - Add option to generate HTML report   // cmdline option
 # - Explore use of 'export' (i.e. do the local vars all need to be exported?)
-cve_xpath="//x:definition[@id='ID']//x:cve"
+cve_xpath="//x:definition[@id='ID']//x:cve/@priority"
 
 # Create CVEREPORT Directory to store files
 printf "\n\e[2G\e[1mCreate CVE REPORT Data Directory\e[0m\n"
