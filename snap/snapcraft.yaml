@@ -1,6 +1,6 @@
 name: oval-core-tools
 base: core22
-version: '0.2'
+version: '0.3'
 summary: This snap provides basic tools for CVE Reporting on Ubuntu Core.
 description: |
   This snap provides basic tools for OVAL-based CVE Reporting on Ubuntu Core.
@@ -39,6 +39,8 @@ parts:
 layout:
   /usr/share/openscap/schemas:
     symlink: $SNAP/usr/share/openscap/schemas
+  /usr/share/openscap/xsl:
+    symlink: $SNAP/usr/share/openscap/xsl
   # required due to oval_probe_eval chdir() logic
   /usr/lib/$CRAFT_ARCH_TRIPLET/openscap:
     symlink: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/openscap
