@@ -201,7 +201,7 @@ process_manifest() {
         summary_snap="snapd"
 
         if [[ "$cve_html" = true ]]; then
-                report_file="--report ${oval_dir}/oscap-cve-scan-report-snapd.html"
+            report_file="--report ${oval_dir}/oscap-cve-scan-report-snapd.html"
         fi
     else
         result_file="${oval_dir}/oscap-cve-scan-result-${oval_dist}.xml"
@@ -219,13 +219,14 @@ process_manifest() {
     ######################
     printf "\n\e[2G\e[1mDownload OVAL Data for CVE scanning to %s\e[0m\n" ${oval_dir}
     oval_uri="https://security-metadata.canonical.com/oval/oci.com.ubuntu.${oval_dist}.cve.oval.xml.bz2"
+    oval_file=${oval_dir}/$(basename ${oval_uri//.bz2})
     test_oval=$(curl -slSL --connect-timeout 5 --max-time 20 --retry 5 --retry-delay 1 -w %{http_code} -o /dev/null ${oval_uri} 2>&1)
 
-    # TODO: add code to check for pre-existing OVAL files (i.e. xenial is currently
-    # twice if manifest.core and manifest.snapd are present.
-    [[ ${test_oval:(-3)} -eq 200 ]] && { printf "\r\e[2G - \e[38;2;0;160;200mINFO\e[0m: Downloading OVAL data for Ubuntu ${SCAN_RELEASE^}\n";wget --show-progress --progress=bar:noscroll --no-dns-cache -qO- ${oval_uri}|bunzip2 -d|tee 1>/dev/null ${oval_dir}/$(basename ${oval_uri//.bz2}); }
-    [[ ${test_oval:(-3)} -eq 404 ]] && { printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: OVAL data file for Ubuntu ${SCAN_RELEASE^} does not exist. Skipping\n" ; }
-    [[ ${test_oval:(-3)} -eq 200 && -s ${oval_dir}/$(basename ${oval_uri//.bz2}) ]] && { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Copied OVAL data for for ${oval_dist} to ${oval_dir}/$(basename ${oval_uri//.bz2})\n"; }
+    if [[ ! -s ${oval_file} ]]; then
+        [[ ${test_oval:(-3)} -eq 200 ]] && { printf "\r\e[2G - \e[38;2;0;160;200mINFO\e[0m: Downloading OVAL data for Ubuntu ${SCAN_RELEASE^}\n";wget --show-progress --progress=bar:noscroll --no-dns-cache -qO- ${oval_uri}|bunzip2 -d|tee 1>/dev/null ${oval_file} }
+        [[ ${test_oval:(-3)} -eq 404 ]] && { printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: OVAL data file for Ubuntu ${SCAN_RELEASE^} does not exist. Skipping\n" ; }
+        [[ ${test_oval:(-3)} -eq 200 && -s ${oval_file} ]] && { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Copied OVAL data for for ${oval_dist} to ${oval_dir}/$(basename ${oval_uri//.bz2})\n"; }
+    fi
 
     ##########################
     # RUN OSCAP OVAL EVAL    #
@@ -277,6 +278,9 @@ fi
 # TODO #
 ########
 #
+# - Fix refresh error:
+#   "error: cannot install snap file: snap "oval-core-tools" has
+#   running apps (cvereport), pids:"
 # - Should there be a single meta-summary file?
 # - add ignore option (i.e. ignore list of manifest files)
 # - Check for existing OVAL CVE files
