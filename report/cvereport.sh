@@ -32,7 +32,7 @@ cve_neg=false
 cve_purge=false
 cve_url=false
 min_cve_pri=""
-kernel_rel="none"
+kernel_rel=""
 
 #########
 # USAGE #
@@ -150,41 +150,51 @@ process_manifest() {
     local report_file=""
     local summary_snap=""
 
-    #printf "\n\e[2GManifest file: %s\n" $1
+    #printf "[Debug]Manifest file: %s\n" $1
 
+    # FIXME: skip manifest.bare* for now, until
+    # fixed in snap_manifest.py
     manifest_file=$(basename $1)
-    if [ ${manifest_file} = "manifest.bare" ]; then
-        printf "\n\e[2GSkipping manifest.bare; FIXME!\n"
+    if [[ ${manifest_file} = manifest.bare* ]]; then
+        printf "Skipping %s\n" ${manifest_file}
         return
     fi
 
-    if [[ ${manifest_file} = "manifest.core" ]]; then
+    base=$(echo ${manifest_file} | cut -d "." -f 2)
+
+    if [[ ${base} = "core" ]]; then
         oval_dist="xenial"
-    elif [[ ${manifest_file} = "manifest.snapd" ]]; then
+    elif [[ ${base} = "snapd" ]]; then
         oval_dist="xenial"
-    elif [[ ${manifest_file} = "manifest.core18" ]]; then
+    elif [[ ${base} = "core18" ]]; then
         oval_dist="bionic"
-    elif [[ ${manifest_file} = "manifest.core20" ]]; then
+    elif [[ ${base} = "core20" ]]; then
         oval_dist="focal"
-    elif [[ ${manifest_file} = "manifest.core22" ]]; then
+    elif [[ ${base} = "core22" ]]; then
         oval_dist="jammy"
-    elif [[ ${manifest_file} = manifest.*kernel* ]]; then
+    elif [[ ${base} = "core24" ]]; then
+        oval_dist="noble"
+    elif [[ ${base} = *kernel* ]]; then
+        #printf "[Debug]Kernel base: %s\n" ${base}
+
         if [[ ! -z ${kernel_rel} ]]; then
+            #printf "[Debug] Setting oval_dist for kernel to %s\n" ${kernel_rel}
             oval_dist=${kernel_rel}
         else
             printf "No kernel release specified, skipping %s\n" ${manifest_file}
             return
         fi
-   else
+    else
         printf "Unsupported manifest release: %s\n" $1
         return
     fi
 
+    #printf "\n\e[2G[Debug]oval_dist is: %s\n" ${oval_dist}
+
     # FIXME: add error check!
     ln -fs $1 manifest
 
-    # FIXME: goes away if .snapd & .core are combined
-    if [ ${manifest_file} = "manifest.snapd" ]; then
+    if [[ ${manifest_file} = manifest*snapd* ]]; then
         result_file="${oval_dir}/oscap-cve-scan-result-snapd.xml"
         cve_report=${cve_dir}/cve-list-snapd.txt
         cve_summary=${cve_dir}/cve-summary-snapd.txt
@@ -233,7 +243,7 @@ process_manifest() {
 # ARGS/OPTIONS #
 ################
 
-ARGS=$(getopt -o d:k:almnpuhH --long dir:,krel:all,low,medium,negligible,purge,url,help,html -n ${prog} -- "$@")
+ARGS=$(getopt -o d:k:almnpuhH --long dir:,krel:,all,low,medium,negligible,purge,url,help,html -n ${prog} -- "$@")
 eval set -- "$ARGS"
 while true ; do
     case "$1" in
@@ -268,16 +278,14 @@ fi
 ########
 #
 # - Should there be a single meta-summary file?
+# - add ignore option (i.e. ignore list of manifest files)
 # - Check for existing OVAL CVE files
 # - move OVAL results file into manifest /results sub-dir
 # - Add a cmdline flag to surpress the manifest associated with this snap's
 #   base, if the system being scanned doesn't include it.
 #   (NOTE - this won't apply to scanned images, only running systems)
 # - Add support to scan an image
-# - [snap_manifest.py] update to generate manifests for each snap (otherwise
-#   there's no way tell which snap a CVE belongs to...
 # - [snap_manifest.py] add entry for snapd to manifest.snapd
-#   there's no way tell which snap a CVE belongs to...
 # - Fix priority logic (build an array of priorities to match on startup)
 # - Fix all shellcheck errors
 # - Unify if/test syntax
@@ -316,7 +324,7 @@ printf "\n\e[2G\e[1mOpen Vulnerabilities\e[0m\n\n"
 
 # generate manifests
 cd ${manifest_dir}
-${SNAP}/bin/snap_manifest.py
+${SNAP}/bin/snap_manifest.py -i
 
 kman=$(ls manifest.*kernel*)
 
