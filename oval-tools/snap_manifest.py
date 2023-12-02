@@ -68,6 +68,8 @@ def parse_snap_manifest(snap_name):
     return (data, base)
 
 def generate_manifest(snap_name):
+    filename=""
+
     (data, base) = parse_snap_manifest(snap_name)
 
     if not data:
@@ -78,16 +80,56 @@ def generate_manifest(snap_name):
         if os.path.exists(f"manifest.{base}"):
             os.rename(f"manifest.{base}", f"manifest.{base}.old")
 
-    with open(f"manifest.{base}", 'a') as fd:
+    # FIXME: we may want to adjust the resulting names as when
+    # manifest_per_snap is enabled, as it results in some odd
+    # names like
+    #
+    # - manifest.snapd.snapd
+    # - manifest.core22.core22
+
+    if manifest_per_snap == True:
+        filename=f"manifest.{base}.{snap_name}"
+    else:
+        filename=f"manifest.{base}"
+
+    with open(f"{filename}", 'a') as fd:
+        entry=""
+
         for pkg, ver in data.items():
-            fd.write(f"{pkg} {ver} {snap_name}\n")
+            if manifest_per_snap == True:
+                entry=f"{pkg} {ver}"
+            else:
+                entry=f"{pkg} {ver} {snap_name}"
 
-
+            fd.write(f"{entry}\n")
+#
+# This script walks the filesystem under the /snap
+# directory, and generates a manifest file per
+# base snap (e.g. core20, core22, ...) that lists
+# all of staged debian packages from the base snap
+# itself, and each snap that declares the same base.
+# The manifest file contains a line for each debian
+# package with the following format:
+#
+# {package name} {version} {snap}
+#
+# The option '-i' can be specified to trigger per
+# snap manifests to be generated. This makes it
+# easier to generate CVE reports on a per-snap
+# basis, instead of per base. When this option
+# is specified, the snap name is no longer included
+# on each line of the manifest files.
 def main():
+    global manifest_per_snap
+    manifest_per_snap = False
+
+    n = len(sys.argv)
+    if n == 2:
+        if sys.argv[1] == "-i":
+            manifest_per_snap = True
+
     for d in os.listdir(SNAPDIR):
         generate_manifest(d)
-
-    print("REMEMBER TO RENAME THE FILE TO 'manifest'")
 
 if __name__ == "__main__":
     main()
