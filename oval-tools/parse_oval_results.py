@@ -65,7 +65,7 @@ class SVGHandler(ContentHandler):
 
     def printResults(self):
         print ("==========================\n")
-        print (f"CVE Summary - {manifest_file}\n")
+        print (f"CVE Summary - {snap}")
         print ("==========================\n")
         print (f"Critical:\t {self.critical}")
         print (f"High:\t\t {self.high}")
@@ -74,6 +74,9 @@ class SVGHandler(ContentHandler):
         print (f"Negligible:\t {self.negligible}")
         print (f"Untriaged:\t {self.untriaged}")
         print ("==========================\n")
+
+
+        print ("CVEs:\n")
 
         # TODO: it would be nice to order the
         # results by priority...
@@ -163,7 +166,7 @@ class SVGHandler(ContentHandler):
                self.cve_defs[self.curr_id].update({"cve": content})
 
 def main():
-    global manifest_file
+    global snap
     global min_pri
     global oval_dist
 
@@ -174,7 +177,7 @@ def main():
 
     results = sys.argv[1]
     oval_dist = sys.argv[2]
-    manifest_file = sys.argv[3]
+    snap = sys.argv[3]
     pri_str = sys.argv[4]
     min_pri = Priority.pri_from_str(pri_str)
 
