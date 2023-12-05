@@ -148,7 +148,6 @@ process_manifest() {
     local cve_report=""
     local cve_summary=""
     local report_file=""
-    local summary_snap=""
 
     #printf "[Debug]Manifest file: %s\n" $1
 
@@ -196,22 +195,20 @@ process_manifest() {
     ln -fs $1 manifest
 
     if [[ ${manifest_file} = manifest*snapd* ]]; then
-        result_file="${oval_dir}/oscap-cve-scan-result-snapd.xml"
+        result_file=${oval_dir}/oscap-cve-scan-result-snapd.xml
         cve_report=${cve_dir}/cve-list-snapd.txt
         cve_summary=${cve_dir}/cve-summary-snapd.txt
-        summary_snap="snapd"
 
         if [[ "$cve_html" = true ]]; then
             report_file="--report ${oval_dir}/oscap-cve-scan-report-snapd.html"
         fi
     else
-        result_file="${oval_dir}/oscap-cve-scan-result-${oval_dist}.xml"
-        cve_report=${cve_dir}/cve-list-${oval_dist}.txt
-        cve_summary=${cve_dir}/cve-summary-${oval_dist}.txt
-        summary_snap=${oval_dist}
+        result_file=${oval_dir}/oscap-cve-scan-result-${snap}.xml
+        cve_report=${cve_dir}/cve-list-${snap}.txtb
+        cve_summary=${cve_dir}/cve-summary-${snap}.txt
 
         if [[ "$cve_html" = true ]]; then
-                report_file="--report ${oval_dir}/oscap-cve-scan-report-${oval_dist}.html"
+            report_file="--report ${oval_dir}/oscap-cve-scan-report-${snap}.html"
         fi
     fi
 
@@ -291,6 +288,8 @@ fi
 # - Fix refresh error:
 #   "error: cannot install snap file: snap "oval-core-tools" has
 #   running apps (cvereport), pids:"
+# - clean up scan-results by default (add -s/--save-results option)
+#   as OVAL results files are all >= 50MB!
 # - Should there be a single meta-summary file?
 # - add ignore option (i.e. ignore list of manifest files)
 # - move OVAL results file into manifest /results sub-dir
