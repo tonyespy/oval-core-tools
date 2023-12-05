@@ -33,6 +33,7 @@ cve_purge=false
 cve_url=false
 min_cve_pri=""
 kernel_rel=""
+save_reports=false
 
 #########
 # USAGE #
@@ -51,6 +52,7 @@ usage() {
     printf "\e[3G -u, --url\e[28GOutput Ubuntu CVE URL (Default: False)\n\n"
     printf "\e[3G -h, --help\e[28GThis message\n\n"
     printf "\e[3G -H, --html\e]28GGenerate per core snap HTML reports\n\n"
+    printf "\e[3G -s, --save\e]28GSave OVAL results files\n\n"
     printf "\e[2GExamples:\n\n"
     printf "\e[4GChange location of collected data:\n"
     printf "\e[6G%s.sh -d %s/cvereport_files\n" ${FUNCNAME%%-*} "$HOME"
@@ -243,15 +245,19 @@ process_manifest() {
     # FIXME: add debug flag?
     ${SNAP}/bin/parse_oval_results.py ${result_file} ${oval_dist} ${snap} ${min_cve_pri} | tee -a ${cve_summary}
 
-    # FIXME: add error check
-    rm manifest
+    # Cleanup
+    if [[ ${save_reports} = false ]]; then
+        rm -f ${result_file}
+    fi
+
+    rm -f manifest
 }
 
 ################
 # ARGS/OPTIONS #
 ################
 
-ARGS=$(getopt -o d:k:almnpuhH --long dir:,krel:,all,low,medium,negligible,purge,url,help,html -n ${prog} -- "$@")
+ARGS=$(getopt -o d:k:almnpuhHs --long dir:,krel:,all,low,medium,negligible,purge,url,help,html,save -n ${prog} -- "$@")
 eval set -- "$ARGS"
 while true ; do
     case "$1" in
@@ -265,6 +271,7 @@ while true ; do
         -u|--url) export cve_url=true;shift 1;;
         -h|--help) usage;exit 2;;
         -H|--html) export cve_html=true;shift 1;;
+        -s|--save) export save_reports=true;shift 1;;
         --) shift;break;;
     esac
 done
@@ -288,8 +295,6 @@ fi
 # - Fix refresh error:
 #   "error: cannot install snap file: snap "oval-core-tools" has
 #   running apps (cvereport), pids:"
-# - clean up scan-results by default (add -s/--save-results option)
-#   as OVAL results files are all >= 50MB!
 # - Should there be a single meta-summary file?
 # - add ignore option (i.e. ignore list of manifest files)
 # - move OVAL results file into manifest /results sub-dir
