@@ -53,7 +53,7 @@ class SVGHandler(ContentHandler):
     def __init__(self):
         super().__init__()
         self.cve_defs = {}
-        self.results = []
+        self.results = {}
         self.defs_done = False
         self.curr_id = ""
         self.critical = 0
@@ -62,9 +62,13 @@ class SVGHandler(ContentHandler):
         self.low = 0
         self.negligible = 0
         self.untriaged = 0
+        self.manifest_pkg = {}
+        self.test_result = False
+        self.true_tests = {}
 
     def printResults(self):
-        print ("==========================\n")
+        printed_list = False
+
         print (f"CVE Summary - {snap}")
         print ("==========================\n")
         print (f"Critical:\t {self.critical}")
@@ -73,22 +77,35 @@ class SVGHandler(ContentHandler):
         print (f"Low:\t\t {self.low}")
         print (f"Negligible:\t {self.negligible}")
         print (f"Untriaged:\t {self.untriaged}")
+        # TODO: add Total:
         print ("==========================\n")
-
-
-        print ("CVEs:\n")
 
         # TODO: it would be nice to order the
         # results by priority...
-        for result in self.results:
-            cve = result["cve"]
-            pri = result["priority"]
+        #
+        # FIXME use key, val... items()
+        for key, value in self.results.items():
+            cve = value["cve"]
+            pri = value["priority"]
+            crit_list = value["crit_list"]
             pri_str = Priority.pri_to_str(pri)
 
-            if pri.value >= min_pri.value:
-                print(f"{cve}\t[{pri_str}]")
+            # just use the first true <criterion>
+            #for crit in crit_list:
+            #    text = self.true_tests[crit]
+            crit = crit_list[0]
+            text = self.true_tests[crit]
 
-        print ("==========================\n")
+            # just use the first <tested_item>
+            item_ref = text[0]
+            pkg = self.manifest_pkg[item_ref]
+
+            if pri.value >= min_pri.value:
+                printed_list = True
+                print(f"{cve}\t| {pri_str} | {pkg}")
+
+        if printed_list == True:
+            print ("==========================\n")
 
     def checkPri(self, result):
         pri = result["priority"]
@@ -111,11 +128,15 @@ class SVGHandler(ContentHandler):
     def updateCounts(self):
         results_len = len(self.results)
         # print(f"[Debug]: # of CVE results: {results_len}")
-        for item in self.results:
-            self.checkPri(item)
+        #
+        # FIXME use key, val... items()
+        for key, value in self.results.items():
+            self.checkPri(value)
 
         print("")
 
+    # TODO: add doc to beginning of this func to describe how
+    # the parsing works...
     def startElement(self, name, attrs):
         self.name = name
 
@@ -141,16 +162,63 @@ class SVGHandler(ContentHandler):
             else:
                 result = attrs["result"]
                 if result == "true":
-                    def_id = attrs["definition_id"]
-                    self.results.append(self.cve_defs[def_id])
+                    self.curr_id = attrs["definition_id"]
+                    self.results[self.curr_id] = self.cve_defs[self.curr_id]
 
         elif name == "cve":
-                # Note - unfortunately package isn't an attribute
-                # or child of <definition>, so it isn't possible
-                # to include in each CVE dict entry
-                pri_str = attrs["priority"]
-                pri = Priority.pri_from_str(pri_str)
-                self.cve_defs[self.curr_id] = {"priority": pri}
+            # Note - unfortunately package isn't an attribute
+            # or child of <definition>, so it isn't possible
+            # to include in each CVE dict entry
+            pri_str = attrs["priority"]
+            pri = Priority.pri_from_str(pri_str)
+            self.cve_defs[self.curr_id] = {"priority": pri}
+        elif name == "ind-sys:textfilecontent_item":
+            # grab every testfilecontent_item and add
+            # to manifest_pkg dict using curr_id as index
+            self.curr_id = attrs["id"]
+            #print(f"[Debug] textfilecontent_item {self.curr_id}")
+        elif name == "test":
+            result = attrs["result"]
+            if result == "true":
+                self.curr_id = attrs["test_id"]
+                # FIXME: get rid of Bool; check for existence
+                # of dict entry for curr_id
+                self.test_result = True
+                self.true_tests[self.curr_id] = []
+            else:
+                self.test_result = False
+        elif name == "tested_item":
+            result = attrs["result"]
+            item_id = attrs["item_id"]
+
+            #
+            # NOTE -- the underlying data somtimes has tested_item with
+            # result="not evaluated" for <tests> with result=true
+            #
+            # TODO: try ignoring result of tested_items and see if this
+            # makes produces better results
+            #
+            #print(f"[Debug] <tested_item item_id={item_id} result={result}>")
+            #if self.test_result == True and result == "true":
+            #if result == "true":
+            #    print(f"[Debug] <tested_item item_id={item_id} result=true>")
+            #    self.true_tests[self.curr_id].append(item_id)
+            if self.test_result == True:
+                self.true_tests[self.curr_id].append(item_id)
+
+        # Only grab <criterion> elements from result <defs>
+        elif name == "criterion":
+            if self.defs_done == True:
+                result = attrs["result"]
+
+                if result == "true":
+                    test_ref = attrs["test_ref"]
+
+                    if "crit_list" in self.results[self.curr_id]:
+                        self.results[self.curr_id]["crit_list"].append(test_ref)
+                    else:
+                        crit_list = [ test_ref ]
+                        self.results[self.curr_id].update({"crit_list": crit_list})
 
     def endElement(self, name): 
         self.name = ""
@@ -164,6 +232,11 @@ class SVGHandler(ContentHandler):
         if self.name == "cve":
             if content.strip() != "":
                self.cve_defs[self.curr_id].update({"cve": content})
+        elif self.name == "ind-sys:text":
+            # TODO: the content of this elemenet is the package
+            # name and version. Maybe drop the version?
+            if content.strip() != "":
+               self.manifest_pkg[self.curr_id] = content
 
 def main():
     global snap
