@@ -34,6 +34,7 @@ cve_url=false
 min_cve_pri=""
 kernel_rel=""
 save_reports=false
+verbose=false
 
 #########
 # USAGE #
@@ -53,6 +54,7 @@ usage() {
     printf "\e[3G -h, --help\e[28GThis message\n\n"
     printf "\e[3G -H, --html\e]28GGenerate per core snap HTML reports\n\n"
     printf "\e[3G -s, --save\e]28GSave OVAL results files\n\n"
+    printf "\e[3G -v, --verbose\e]28GProduce more verbose output\n\n"
     printf "\e[2GExamples:\n\n"
     printf "\e[4GChange location of collected data:\n"
     printf "\e[6G%s.sh -d %s/cvereport_files\n" ${FUNCNAME%%-*} "$HOME"
@@ -71,7 +73,10 @@ process_manifest() {
     # fixed in snap_manifest.py
     manifest_file=$(basename $1)
     if [[ ${manifest_file} = manifest.bare* ]]; then
-        printf "Skipping %s\n" ${manifest_file}
+        if [[ ${verbose} = true ]]; then
+            printf "Skipping %s\n" ${manifest_file}
+        fi
+
         return
     fi
 
@@ -136,17 +141,27 @@ process_manifest() {
     test_oval=$(curl -slSL --connect-timeout 5 --max-time 20 --retry 5 --retry-delay 1 -w %{http_code} -o /dev/null ${oval_uri} 2>&1)
 
     if [[ ! -s ${oval_file} ]]; then
-        printf "\n\e[2G\e[1mDownload OVAL Data for CVE scanning to %s\e[0m\n" ${oval_dir}
-        printf "\n\e[2G\e[1mDownload OVAL Data to %s\e[0m\n" ${oval_file}
-
-        if [[ ${test_oval:(-3)} -eq 200 ]]; then
-            printf "\r\e[2G - \e[38;2;0;160;200mINFO\e[0m: Downloading OVAL data for Ubuntu ${SCAN_RELEASE^}\n"
-            wget --show-progress --progress=bar:noscroll --no-dns-cache -qO- ${oval_uri}|bunzip2 -d|tee 1>/dev/null ${oval_file}
-        elif [[ ${test_oval:(-3)} -eq 404 ]]; then
-            printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: OVAL data file for Ubuntu ${SCAN_RELEASE^} does not exist. Skipping\n"
+        if [[ ${verbose} = true ]]; then
+            progress_
+            printf "\n\e[2G\e[1mDownload OVAL Data for CVE scanning to %s\e[0m\n" ${oval_dir}
+            printf "\n\e[2G\e[1mDownload OVAL Data to %s\e[0m\n" ${oval_file}
         fi
 
-        if [[ ${test_oval:(-3)} -eq 200 && -s ${oval_file} ]]; then
+        if [[ ${test_oval:(-3)} -eq 200 ]]; then
+            progress_bar=""
+
+            if [[ ${verbose} = true ]]; then
+                progress_bar="--show-progress --progress=bar:noscroll"
+                printf "\r\e[2G - \e[38;2;0;160;200mINFO\e[0m: Downloading OVAL data for Ubuntu ${SCAN_RELEASE^}\n"
+            fi
+            wget ${progress_bar} --no-dns-cache -qO- ${oval_uri}|bunzip2 -d|tee 1>/dev/null ${oval_file}
+        elif [[ ${test_oval:(-3)} -eq 404 ]]; then
+            if [[ ${verbose} = true ]]; then
+                printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: OVAL data file for Ubuntu ${SCAN_RELEASE^} does not exist. Skipping\n"
+            fi
+        fi
+
+        if [[ ${test_oval:(-3)} -eq 200 && -s ${oval_file} && ${verbose} = true ]]; then
             printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Copied OVAL data for for ${oval_dist} to ${oval_dir}/$(basename ${oval_uri//.bz2})\n"
         fi
     fi
@@ -171,7 +186,7 @@ process_manifest() {
 # ARGS/OPTIONS #
 ################
 
-ARGS=$(getopt -o d:k:almnpuhHs --long dir:,krel:,all,low,medium,negligible,purge,url,help,html,save -n ${prog} -- "$@")
+ARGS=$(getopt -o d:k:almnpuhHsv --long dir:,krel:,all,low,medium,negligible,purge,url,help,html,save,verbose -n ${prog} -- "$@")
 eval set -- "$ARGS"
 while true ; do
     case "$1" in
@@ -186,6 +201,7 @@ while true ; do
         -h|--help) usage;exit 2;;
         -H|--html) export cve_html=true;shift 1;;
         -s|--save) export save_reports=true;shift 1;;
+        -v|--verbose) export verbose=true;shift 1;;
         --) shift;break;;
     esac
 done
@@ -206,9 +222,7 @@ fi
 # TODO #
 ########
 #
-# - Fix refresh error:
-#   "error: cannot install snap file: snap "oval-core-tools" has
-#   running apps (cvereport), pids:"
+# - [snap_manifest.py] add entry for snapd to manifest.snapd
 # - Should there be a single meta-summary file?
 # - add ignore option (i.e. ignore list of manifest files)
 # - move OVAL results file into manifest /results sub-dir
@@ -216,28 +230,43 @@ fi
 #   base, if the system being scanned doesn't include it.
 #   (NOTE - this won't apply to scanned images, only running systems)
 # - Add support to scan an image
-# - [snap_manifest.py] add entry for snapd to manifest.snapd
-# - Fix priority logic (build an array of priorities to match on startup)
 # - Fix all shellcheck errors
 # - Unify if/test syntax
 # - Unify var quoting/bracing usage
-# - Add option to generate HTML report   // cmdline option
-# - Explore use of 'export' (i.e. do the local vars all need to be exported?)
 cve_xpath="//x:definition[@id='ID']//x:cve"
 
 # Create CVEREPORT Directory to store files
-printf "\n\e[2G\e[1mCreate CVE REPORT Data Directory\e[0m\n"
+if [[ ${verbose} = true ]]; then
+    printf "\n\e[2G\e[1mCreate CVE REPORT Data Directory\e[0m\n"
+fi
 
 # Remove existing directory if user chose that option
 if [[ ${cve_purge} = true ]]; then
-	printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: Removing existing directory: %s\n" ${cve_dir}
-	[[ -d ${cve_dir} ]] && { rm -rf ${cve_dir}; } || { printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: Existing directory does not exist.\n"; }
-	[[ -d ${cve_dir} ]] && { printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not remove existing directory %s\n" ${cve_dir}; } || { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Removed existing directory %s\n" ${cve_dir}; }
+    if [[ ${verbose} = true ]]; then
+        printf "\e[2G - \e[38;2;0;160;200mINFO\e[0m: Removing existing directory: %s\n" ${cve_dir}
+    fi
+
+	if [[ -d ${cve_dir} ]]; then
+        rm -rf ${cve_dir}
+    fi
+
+    if [[ -d ${cve_dir} ]]; then
+        printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not remove existing directory %s\n" ${cve_dir}
+    elif [[ ${verbose} = true ]]; then
+        printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Removed existing directory %s\n" ${cve_dir}
+    fi
 fi
 
 # Create CVEREPORT directory using a given name
 mkdir -p ${cve_dir}
-[[ -d ${cve_dir} ]] && { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Created directory %s\n" ${cve_dir}; } || { printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not create directory %s\n" ${cve_dir};exit; }
+if [[ -d ${cve_dir} ]]; then
+    if ${verbose} = true ]]; then
+        printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Created directory %s\n" ${cve_dir}
+    fi
+else
+    printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not create directory %s\n" ${cve_dir}
+    exit
+fi
 
 # FIXME: these need to be per core snap!!!
 manifest_dir=${cve_dir}/manifests
@@ -245,23 +274,35 @@ oval_dir=${cve_dir}/oval
 
 # Create MANIFESTS directory
 mkdir -p ${manifest_dir}
-[[ -d ${manifest_dir} ]] && { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Created directory %s\n" ${manifest_dir}; } || { printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not create directory %s\n" ${manifest_dir};exit; }
+if [[ -d ${manifest_dir} ]]; then
+    if [[ ${verbose} = true ]]; then
+        printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Created directory %s\n" ${manifest_dir}
+    fi
+else
+    printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not create directory %s\n" ${manifest_dir}
+    exit
+fi
 
 # Create OVAL directory
 mkdir -p ${oval_dir}
-[[ -d ${oval_dir} ]] && { printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Created directory %s\n" ${manifest_dir}; } || { printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not create directory %s\n" ${oval_dir};exit; }
+if [[ -d ${oval_dir} ]]; then
+    if [[ ${verbose} = true ]]; then
+        printf "\e[2G - \e[38;2;0;255;0mSUCCESS\e[0m: Created directory %s\n" ${manifest_dir}
+    fi
+else
+    printf "\e[2G - \e[38;2;255;0;0mERROR\e[0m: Could not create directory %s\n" ${oval_dir}
+    exit
+fi
 
-printf "\n\e[2G\e[1mOpen Vulnerabilities\e[0m\n\n"
+printf "\n\e[1mOpen Vulnerabilities\e[0m\n\n"
 
 # generate manifests
 cd ${manifest_dir}
 ${SNAP}/bin/snap_manifest.py -i
 
-kman=$(ls manifest.*kernel*)
-
 for file in ./* ; do         # Use ./* ... NEVER bare *
   if [ -e "$file" ] ; then   # Check whether file exists.
-     process_manifest ${file} ${kman}
+     process_manifest ${file}
   fi
 done
 
