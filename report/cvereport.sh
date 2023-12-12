@@ -131,7 +131,7 @@ process_manifest() {
     ######################
     # DOWNLOAD OVAL DATA #
     ######################
-    oval_uri="https://security-metadata.canonical.com/oval/oci.com.ubuntu.${oval_dist}.cve.oval.xml.bz2"
+    oval_uri="https://security-metadata.canonical.com/oval/oci.com.ubuntu.esm-apps_${oval_dist}.cve.oval.xml.bz2"
     oval_file=${oval_dir}/$(basename ${oval_uri//.bz2})
     test_oval=$(curl -slSL --connect-timeout 5 --max-time 20 --retry 5 --retry-delay 1 -w %{http_code} -o /dev/null ${oval_uri} 2>&1)
 
