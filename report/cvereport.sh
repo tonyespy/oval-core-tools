@@ -32,6 +32,7 @@ cve_neg=false
 cve_purge=false
 cve_url=false
 min_cve_pri=""
+image_path=""
 kernel_rel=""
 save_reports=false
 verbose=false
@@ -45,7 +46,8 @@ usage() {
     printf "\e[2GUsage: %s.sh [ Options ] \n" ${FUNCNAME%%-*}
     printf "\e[2GOptions:\n\n"
     printf "\e[3G -d, --dir\e[28GDirectory to store CVE Report Data (Default: /tmp/cvereport_files)\n\n"
-    printf "\e[3G -k, --krel\e[28GSpecify kernel release\n\n"
+    printf "\e[3G -i, --image\e[28GUbuntu Core (uncompressed) image path\n\n"
+    printf "\e[3G -k, --krel\e[28GSpecify kernel release (e.g. focal, jammy, ...)\n\n"
     printf "\e[3G -l, --low\e[28GInclude 'low' priority CVEs (Default: False)\n\n"
     printf "\e[3G -m, --medium\e[28GInclude 'medium' priority CVEs (Default: False)\n\n"
     printf "\e[3G -n, --negligible\e[28GInclude 'negligibile' priority CVEs (Default: False)\n\n"
@@ -61,7 +63,6 @@ usage() {
 }
 
 # $1 = manifest file
-# $2 = kernel manifest
 process_manifest() {
     local cve_report=""
     local cve_summary=""
@@ -182,15 +183,60 @@ process_manifest() {
     rm -f manifest
 }
 
+# $1 = image file
+unpack_image() {
+    output=$(kpartx -l $1)
+
+    # FIXME: this is fragile, and should probably
+    # be re-factored
+    device=$(echo $output | awk '{print $7}')
+
+    mkdir -p /tmp/mnt
+    kpartx -as "$1"
+
+    # cleanup /tmp directories and
+    # force umount to clear previous mounts
+    rm -rf /tmp/snaps
+    umount -q /tmp/mnt
+
+    # check for error
+    mount /dev/mapper/${device} /tmp/mnt
+    if ! mountpoint -q /tmp/mnt; then
+        printf "\e[2G - \e[38;2;0;160;200mERROR\e[0m: Failed to mount: %s\n" ${device}
+        exit
+    fi
+
+    for file in /tmp/mnt/snaps/* ; do
+        name=$(basename ${file})
+        curr_dir=/tmp/snaps/${name%%_*snap}/current
+        mkdir -p ${curr_dir}
+
+        # printf "[Debug] unpack_image: %s\n" ${file}
+
+        if [[ ! -d ${curr_dir} ]]; then
+            printf "Failed to make tmp snap dir %s\n" ${curr_dir}
+            exit
+
+        fi
+
+        unsquashfs -quiet -f -d ${curr_dir} -n -no ${file} usr/share/snappy/dpkg.yaml snap/manifest.yaml doc/linux-modules-*/changelog.Debian.gz
+
+    done
+
+    kpartx -ds $1
+    umount -q /tmp/mnt
+}
+
 ################
 # ARGS/OPTIONS #
 ################
 
-ARGS=$(getopt -o d:k:almnpuhHsv --long dir:,krel:,all,low,medium,negligible,purge,url,help,html,save,verbose -n ${prog} -- "$@")
+ARGS=$(getopt -o d:i:k:almnpuhHsv --long dir:,image:,krel:,all,low,medium,negligible,purge,url,help,html,save,verbose -n ${prog} -- "$@")
 eval set -- "$ARGS"
 while true ; do
     case "$1" in
         -d|--dir) export cve_dir=${2};shift 2;;
+        -i|--image) export image_path=${2};shift 2;;
         -k|--krel) export kernel_rel=${2};shift 2;;
         -a|--all) export cve_all=true;shift 1;;
         -n|--negligible) export cve_neg=true;shift 1;;
@@ -234,6 +280,12 @@ fi
 # - Unify if/test syntax
 # - Unify var quoting/bracing usage
 cve_xpath="//x:definition[@id='ID']//x:cve"
+
+# Verify image exists
+if [[ ${image_path} != "" && ! -f ${image_path} ]]; then
+    printf "\e[2G - \e[38;2;0;160;200mERROR\e[0m: Image path doesn't exist: %s\n" ${image_path}
+    exit
+fi
 
 # Create CVEREPORT Directory to store files
 if [[ ${verbose} = true ]]; then
@@ -294,17 +346,31 @@ else
     exit
 fi
 
+image_opt=""
+if [[ ${image_path} != "" ]]; then
+    unpack_image ${image_path}
+
+    # FIXME
+    image_opt="--dir /tmp/snaps"
+fi
+
 printf "\n\e[1mOpen Vulnerabilities\e[0m\n\n"
 
 # generate manifests
 cd ${manifest_dir}
-${SNAP}/bin/snap_manifest.py -i
+
+${SNAP}/bin/snap_manifest.py --manifest_per_snap ${image_opt}
 
 for file in ./* ; do         # Use ./* ... NEVER bare *
   if [ -e "$file" ] ; then   # Check whether file exists.
      process_manifest ${file}
   fi
 done
+
+# cleanup
+if [[ -d /tmp/snaps ]]; then
+    rm -rf /tmp/snaps
+fi
 
 # Show elapsed time
 printf "\n\e[1mOVAL CVE Report completed in %s\e[0m\n\n" $(TZ=UTC date --date now-${NOW} "+%H:%M:%S")

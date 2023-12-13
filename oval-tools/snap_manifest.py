@@ -1,5 +1,6 @@
 #!/bin/env python3
 
+import argparse
 import glob
 import gzip
 import os
@@ -7,7 +8,7 @@ import re
 import sys
 import yaml
 
-SNAPDIR = "/snap/"
+DEFAULT_SNAPDIR = "/snap/"
 bases = []
 
 def read_snap_manifest(snap_name):
@@ -17,7 +18,7 @@ def read_snap_manifest(snap_name):
     man_yaml = None
     section = None
 
-    fn = os.path.join(SNAPDIR, snap_name, "current/")
+    fn = os.path.join(snapdir, snap_name, "current/")
 
     if os.path.exists(os.path.join(fn, dpkg)):
         with open(os.path.join(fn, dpkg), 'r') as fd:
@@ -121,14 +122,25 @@ def generate_manifest(snap_name):
 # on each line of the manifest files.
 def main():
     global manifest_per_snap
+    global snapdir
+
     manifest_per_snap = False
+    snapdir = DEFAULT_SNAPDIR
 
-    n = len(sys.argv)
-    if n == 2:
-        if sys.argv[1] == "-i":
-            manifest_per_snap = True
+    # TODO: add real python cmdline option parsing
+    # provide new option to handle images
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--manifest_per_snap", action='store_true', help="generate per-snap manifests files")
+    parser.add_argument("-d", "--dir", help="a pseudo /snaps dir with extracted changelog & manifest files")
+    args = parser.parse_args()
+    manifest_per_snap = args.manifest_per_snap
 
-    for d in os.listdir(SNAPDIR):
+    # let cvereport set up the directory, and just pass an
+    # alternate directory into this script
+    if args.dir != "":
+        snapdir = args.dir
+
+    for d in os.listdir(snapdir):
         generate_manifest(d)
 
 if __name__ == "__main__":
