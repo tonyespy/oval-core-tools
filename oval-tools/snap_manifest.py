@@ -137,7 +137,7 @@ def main():
 
     # let cvereport set up the directory, and just pass an
     # alternate directory into this script
-    if args.dir != "":
+    if args.dir:
         snapdir = args.dir
 
     for d in os.listdir(snapdir):

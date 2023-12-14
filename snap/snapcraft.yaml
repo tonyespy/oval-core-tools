@@ -1,6 +1,6 @@
 name: oval-core-tools
 base: core22
-version: '0.7'
+version: '0.8'
 summary: This snap provides basic tools for CVE Reporting on Ubuntu Core.
 description: |
   This snap provides basic tools for OVAL-based CVE Reporting on Ubuntu Core.
@@ -11,6 +11,8 @@ confinement: devmode # use 'strict' once you have the right plugs and slots
 apps:
   cvereport:
     command: cvereport.sh
+    environment:
+        LD_LIBRARY_PATH: $SNAP/usr/lib/x86_64-linux-gnu/android:$LD_LIBRARY_PATH
   scan:
     command: bin/snap_manifest.py
 
@@ -23,8 +25,10 @@ parts:
     plugin: dump
     source: ./report
     stage-packages:
+      - android-sdk-libsparse-utils
       - bzip2
       - curl
+      - file
       - jq
       - kpartx
       - libopenscap8
@@ -38,6 +42,8 @@ parts:
       - -usr/lib/*/libopenscap_sce.so.*
 
 layout:
+  /usr/share/misc/magic.mgc:
+    symlink: $SNAP/usr/share/misc/magic.mgc
   /usr/share/openscap/schemas:
     symlink: $SNAP/usr/share/openscap/schemas
   /usr/share/openscap/xsl:
