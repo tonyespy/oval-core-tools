@@ -282,6 +282,10 @@ fi
 # TODO #
 ########
 #
+# - Fix scanning issue with ARM non-sparse images
+#   (e.g. ubuntu-core-22-arm64+raspi.img); issue
+#   is that non-x86 images don't include a BIOS
+#   boot parition.
 # - Debug issue w/zombie oscap probe_textfilecontent54 processes
 #   that prevents snap refreshes.
 # - [snap_manifest.py] add entry for snapd to manifest.snapd
