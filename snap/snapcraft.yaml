@@ -1,12 +1,20 @@
 name: oval-core-tools
 base: core22
-version: '0.8'
+version: '0.9'
 summary: This snap provides basic tools for CVE Reporting on Ubuntu Core.
 description: |
   This snap provides basic tools for OVAL-based CVE Reporting on Ubuntu Core.
 
 grade: devel # must be 'stable' to release into candidate/stable channels
 confinement: devmode # use 'strict' once you have the right plugs and slots
+
+architectures:
+  - build-on: [ 'amd64' ]
+    build-for: [ 'amd64' ]
+  - build-on: [ 'arm64' ]
+    build-for: [ 'arm64' ]
+  - build-on: [ 'arm64' ]
+    build-for: [ 'armhf' ]
 
 apps:
   cvereport:
