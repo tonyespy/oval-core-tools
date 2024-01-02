@@ -21,8 +21,6 @@ apps:
     command: cvereport.sh
     environment:
         LD_LIBRARY_PATH: $SNAP/usr/lib/x86_64-linux-gnu/android:$LD_LIBRARY_PATH
-  scan:
-    command: bin/snap_manifest.py
 
 parts:
   oval-tools:
