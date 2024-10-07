@@ -58,7 +58,7 @@ usage() {
     printf "\e[3G -s, --save\e]28GSave OVAL results files\n\n"
     printf "\e[3G -v, --verbose\e]28GProduce more verbose output\n\n"
     printf "\e[2GExamples:\n\n"
-    printf "\e[4GChange location of collected data:\n"
+    printf "\e[4GChange location of the collected data:\n"
     printf "\e[6G%s.sh -d %s/cvereport_files\n" ${FUNCNAME%%-*} "$HOME"
 }
 
