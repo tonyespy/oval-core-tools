@@ -6,7 +6,11 @@ description: |
   This snap provides basic tools for OVAL-based CVE Reporting on Ubuntu Core.
 
 grade: devel # must be 'stable' to release into candidate/stable channels
-confinement: devmode # use 'strict' once you have the right plugs and slots
+
+# Note -- this might not actually work, but is being updated to help test
+# validation set semantics. The last known working revisions for arm64 are
+# r23 & r25!
+confinement: strict
 
 architectures:
   - build-on: [ 'amd64' ]
